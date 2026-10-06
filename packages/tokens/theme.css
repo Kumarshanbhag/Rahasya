@@ -1,0 +1,148 @@
+/* Generated from packages/tokens/src by `pnpm --filter @rahasya/tokens build`. Edit the TypeScript, not this file. */
+
+@theme {
+  --radius-chip: 12px;
+  --radius-row: 16px;
+  --radius-card: 22px;
+  --radius-input: 28px;
+  --radius-sheet: 28px;
+  --radius-drawer: 32px;
+  --text-caption: 11px;
+  --text-meta: 12px;
+  --text-label: 13px;
+  --text-body: 15px;
+  --text-button: 16px;
+  --text-title: 22px;
+  --text-page: 30px;
+  --text-display: 34px;
+}
+
+@layer theme {
+  :root {
+    @variant light {
+      --color-background: #F5F3FA;
+      --color-foreground: #1E1B2E;
+      --color-muted: #6B6780;
+      --color-accent: #6B4CFF;
+      --color-on-accent: #FFFFFF;
+      --color-soft: rgba(255,255,255,0.85);
+      --color-selected: rgba(139,108,255,0.14);
+      --color-warning: #B45309;
+      --color-danger: #BE185D;
+      --color-danger-soft: rgba(190,24,93,0.10);
+      --color-success: #15803D;
+      --color-surface-edge: rgba(255,255,255,0.85);
+      --color-orb-glow: rgba(139,108,255,0.35);
+      --color-orb-shine: rgba(255,255,255,0.9);
+      --color-surface: rgba(255,255,255,0.55);
+      --font-heading: Sora-SemiBold;
+      --font-body: Sora-Regular;
+      --font-mono: DMMono-Medium;
+    }
+
+    @variant dark {
+      --color-background: #0B0A1A;
+      --color-foreground: #F4F2FF;
+      --color-muted: #C9C4E8;
+      --color-accent: #C4B5FD;
+      --color-on-accent: #FFFFFF;
+      --color-soft: rgba(255,255,255,0.14);
+      --color-selected: rgba(255,255,255,0.16);
+      --color-warning: #FBBF24;
+      --color-danger: #F9A8D4;
+      --color-danger-soft: rgba(249,168,212,0.16);
+      --color-success: #6EE7B7;
+      --color-surface-edge: rgba(255,255,255,0.22);
+      --color-orb-glow: rgba(107,76,255,0.45);
+      --color-orb-shine: rgba(255,255,255,0.5);
+      --color-surface: rgba(255,255,255,0.20);
+      --font-heading: Outfit-SemiBold;
+      --font-body: Outfit-Regular;
+      --font-mono: DMMono-Medium;
+    }
+
+    @variant glass-wallet {
+      --color-background: #0B0A1A;
+      --color-foreground: #F4F2FF;
+      --color-muted: #C9C4E8;
+      --color-accent: #C4B5FD;
+      --color-on-accent: #FFFFFF;
+      --color-soft: rgba(255,255,255,0.14);
+      --color-selected: rgba(255,255,255,0.16);
+      --color-warning: #FBBF24;
+      --color-danger: #F9A8D4;
+      --color-danger-soft: rgba(249,168,212,0.16);
+      --color-success: #6EE7B7;
+      --color-surface-edge: rgba(255,255,255,0.22);
+      --color-orb-glow: rgba(107,76,255,0.45);
+      --color-orb-shine: rgba(255,255,255,0.5);
+      --color-surface: rgba(255,255,255,0.20);
+      --font-heading: Outfit-SemiBold;
+      --font-body: Outfit-Regular;
+      --font-mono: DMMono-Medium;
+    }
+
+    @variant daylight {
+      --color-background: #F5F3FA;
+      --color-foreground: #1E1B2E;
+      --color-muted: #6B6780;
+      --color-accent: #6B4CFF;
+      --color-on-accent: #FFFFFF;
+      --color-soft: rgba(255,255,255,0.85);
+      --color-selected: rgba(139,108,255,0.14);
+      --color-warning: #B45309;
+      --color-danger: #BE185D;
+      --color-danger-soft: rgba(190,24,93,0.10);
+      --color-success: #15803D;
+      --color-surface-edge: rgba(255,255,255,0.85);
+      --color-orb-glow: rgba(139,108,255,0.35);
+      --color-orb-shine: rgba(255,255,255,0.9);
+      --color-surface: rgba(255,255,255,0.55);
+      --font-heading: Sora-SemiBold;
+      --font-body: Sora-Regular;
+      --font-mono: DMMono-Medium;
+    }
+
+    @variant holographic {
+      --color-background: #07070A;
+      --color-foreground: #F4F4F6;
+      --color-muted: #9A9AA6;
+      --color-accent: #7CF7FF;
+      --color-on-accent: #07070A;
+      --color-soft: #1E1E26;
+      --color-selected: #1E1E26;
+      --color-warning: #FFE08A;
+      --color-danger: #FF8AD8;
+      --color-danger-soft: rgba(255,138,216,0.14);
+      --color-success: #7CF7FF;
+      --color-surface-edge: #B388FF;
+      --color-orb-glow: rgba(179,136,255,0.35);
+      --color-orb-shine: rgba(255,255,255,0.2);
+      --color-surface: #121217;
+      --font-heading: Outfit-SemiBold;
+      --font-body: Outfit-Regular;
+      --font-mono: DMMono-Medium;
+    }
+
+    @variant console {
+      --color-background: #F6F5FA;
+      --color-foreground: #1E1B2E;
+      --color-muted: #6B6780;
+      --color-accent: #6B4CFF;
+      --color-on-accent: #FFFFFF;
+      --color-soft: rgba(30,27,46,0.06);
+      --color-selected: rgba(139,108,255,0.12);
+      --color-warning: #B45309;
+      --color-danger: #BE185D;
+      --color-danger-soft: rgba(190,24,93,0.10);
+      --color-success: #15803D;
+      --color-surface-edge: rgba(30,27,46,0.08);
+      --color-orb-glow: rgba(139,108,255,0.35);
+      --color-orb-shine: rgba(255,255,255,0.9);
+      --color-surface: rgba(255,255,255,0.84);
+      --font-heading: Sora-SemiBold;
+      --font-body: Sora-Regular;
+      --font-mono: DMMono-Medium;
+    }
+  }
+}

@@ -1,0 +1,355 @@
+// Rahasya database. It holds only what docs/SPEC.md "API and database" allows: key-derivation
+// settings, a hash of the authKey, wrapped keys and ciphertext. Never a plaintext secret.
+
+generator client {
+  provider     = "prisma-client"
+  output       = "../src/generated/prisma"
+  moduleFormat = "cjs"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum UserStatus {
+  ACTIVE
+  LOCKED
+  SUSPENDED
+
+  @@map("user_status")
+}
+
+enum Platform {
+  android
+  web
+
+  @@map("platform")
+}
+
+model User {
+  id              String     @id @default(uuid()) @db.Uuid
+  email           String     @unique
+  kdfSalt         Bytes      @map("kdf_salt")
+  kdfParams       Json       @map("kdf_params")
+  /// Argon2id(authKey) under the server's own salt; the master password never reaches the server.
+  authHash        String     @map("auth_hash")
+  /// XChaCha20-Poly1305(wrapKey, vaultKey)
+  wrappedVaultKey Bytes      @map("wrapped_vault_key")
+  /// TOTP secret sealed with the server's DATA_KEY (AES-256-GCM).
+  totpSecretEnc   Bytes?     @map("totp_secret_enc")
+  totpEnabled     Boolean    @default(false) @map("totp_enabled")
+  /// Last accepted TOTP time step, so a code can't be replayed.
+  totpLastStep    Int?       @map("totp_last_step")
+  status          UserStatus @default(ACTIVE)
+  failedLogins    Int        @default(0) @map("failed_logins")
+  lockedUntil     DateTime?  @map("locked_until") @db.Timestamptz(3)
+  /// Per-user change counter: every vault write bumps it and stamps the rows it touches.
+  revision        Int        @default(0)
+  lastLoginAt     DateTime?  @map("last_login_at") @db.Timestamptz(3)
+  createdAt       DateTime   @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime   @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  devices       Device[]
+  refreshTokens RefreshToken[]
+  items         VaultItem[]
+  groups        Group[]
+  labels        Label[]
+  recoveryKeys  RecoveryKey[]
+  recoveries    RecoveryRequest[]
+
+  @@map("users")
+}
+
+model Device {
+  id         String    @id @default(uuid()) @db.Uuid
+  userId     String    @map("user_id") @db.Uuid
+  name       String
+  platform   Platform
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  lastSeenAt DateTime  @default(now()) @map("last_seen_at") @db.Timestamptz(3)
+  revokedAt  DateTime? @map("revoked_at") @db.Timestamptz(3)
+
+  user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  refreshTokens RefreshToken[]
+
+  @@index([userId])
+  @@map("devices")
+}
+
+model RefreshToken {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  deviceId  String    @map("device_id") @db.Uuid
+  /// SHA-256 of the token; the token itself is only ever in the client's hands.
+  tokenHash String    @unique @map("token_hash")
+  expiresAt DateTime  @map("expires_at") @db.Timestamptz(3)
+  revokedAt DateTime? @map("revoked_at") @db.Timestamptz(3)
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  device Device @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+
+  @@index([deviceId])
+  @@map("refresh_tokens")
+}
+
+// ---- Vault: entries, their history, groups and labels, Trash ----
+// Ids are chosen by the client so an entry can be created offline. Every row carries the
+// user's revision at its last change, which is what GET /vault/sync?since= pages on.
+
+model VaultItem {
+  id        String    @id @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  /// null = Unsorted
+  groupId   String?   @map("group_id") @db.Uuid
+  /// Encrypted entry (name, fields, notes, favourite…). null once deleted forever: the row stays as a tombstone for sync.
+  blob      Bytes?
+  revision  Int
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+  /// In Trash since; purged 30 days later.
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(3)
+
+  user    User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  group   Group?        @relation(fields: [groupId], references: [id], onDelete: SetNull)
+  labels  ItemLabel[]
+  history ItemHistory[]
+
+  @@index([userId, revision])
+  @@index([deletedAt])
+  @@map("vault_items")
+}
+
+/// Versions an edit replaced: the last 10 per entry, kept 30 days.
+model ItemHistory {
+  id        String   @id @default(uuid()) @db.Uuid
+  itemId    String   @map("item_id") @db.Uuid
+  blob      Bytes
+  /// The revision this version had.
+  revision  Int
+  /// When it was replaced.
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  item VaultItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  @@index([itemId, revision])
+  @@index([createdAt])
+  @@map("item_history")
+}
+
+/// Up to 3 levels. parentId has no foreign key: the API checks the whole tree (owner, depth, cycles) on every write.
+model Group {
+  id        String    @id @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  parentId  String?   @map("parent_id") @db.Uuid
+  nameEnc   Bytes     @map("name_enc")
+  sortOrder Int       @default(0) @map("sort_order")
+  revision  Int
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(3)
+
+  user  User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items VaultItem[]
+
+  @@index([userId, revision])
+  @@map("groups")
+}
+
+model Label {
+  id        String    @id @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  nameEnc   Bytes     @map("name_enc")
+  revision  Int
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(3)
+
+  user  User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items ItemLabel[]
+
+  @@index([userId, revision])
+  @@map("labels")
+}
+
+model ItemLabel {
+  itemId  String @map("item_id") @db.Uuid
+  labelId String @map("label_id") @db.Uuid
+
+  item  VaultItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  label Label     @relation(fields: [labelId], references: [id], onDelete: Cascade)
+
+  @@id([itemId, labelId])
+  @@index([labelId])
+  @@map("item_labels")
+}
+
+// ---- Admin console: admins, security keys, roles, user invites, audit log, emergency recovery ----
+
+enum AdminStatus {
+  INVITED // invite sent; no password or security key yet
+  ACTIVE
+  SUSPENDED
+  FROZEN // break-glass freeze of the super admin
+
+  @@map("admin_status")
+}
+
+model AdminRole {
+  id          String   @id @default(uuid()) @db.Uuid
+  name        String   @unique
+  /// From ADMIN_PERMISSIONS in @rahasya/config.
+  permissions String[]
+  builtIn     Boolean  @default(false) @map("built_in")
+  createdById String?  @map("created_by") @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  admins Admin[]
+
+  @@map("admin_roles")
+}
+
+model Admin {
+  id              String      @id @default(uuid()) @db.Uuid
+  email           String      @unique
+  name            String
+  passwordHash    String?     @map("password_hash")
+  roleId          String      @map("role_id") @db.Uuid
+  /// The one protected super admin. A flag, not a role, so no role change can remove it.
+  isSuper         Boolean     @default(false) @map("is_super")
+  status          AdminStatus @default(INVITED)
+  /// SHA-256 of the invite token; cleared once the invite is accepted.
+  inviteHash      String?     @unique @map("invite_hash")
+  inviteExpiresAt DateTime?   @map("invite_expires_at") @db.Timestamptz(3)
+  invitedById     String?     @map("invited_by") @db.Uuid
+  lastLoginAt     DateTime?   @map("last_login_at") @db.Timestamptz(3)
+  createdAt       DateTime    @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  role      AdminRole         @relation(fields: [roleId], references: [id])
+  keys      AdminKey[]
+  requested RecoveryRequest[] @relation("requested")
+  confirmed RecoveryRequest[] @relation("confirmed")
+
+  @@map("admins")
+}
+
+/// WebAuthn credentials: hardware security keys or passkeys.
+model AdminKey {
+  /// Credential id, base64url.
+  id         String    @id
+  adminId    String    @map("admin_id") @db.Uuid
+  publicKey  Bytes     @map("public_key")
+  counter    BigInt    @default(0)
+  transports String[]
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  lastUsedAt DateTime? @map("last_used_at") @db.Timestamptz(3)
+
+  admin Admin @relation(fields: [adminId], references: [id], onDelete: Cascade)
+
+  @@index([adminId])
+  @@map("admin_keys")
+}
+
+/// People an admin invited who haven't created their account yet.
+model UserInvite {
+  id          String    @id @default(uuid()) @db.Uuid
+  email       String    @unique
+  invitedById String    @map("invited_by") @db.Uuid
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  acceptedAt  DateTime? @map("accepted_at") @db.Timestamptz(3)
+
+  @@map("user_invites")
+}
+
+enum AuditActor {
+  admin
+  user
+  system
+
+  @@map("audit_actor")
+}
+
+enum AuditCategory {
+  signin
+  admin
+  emergency
+
+  @@map("audit_category")
+}
+
+/// Append-only and hash-chained: each row's hash covers the previous one. A trigger refuses UPDATE, DELETE and TRUNCATE.
+model AuditLog {
+  id          BigInt        @id @default(autoincrement())
+  at          DateTime      @db.Timestamptz(3)
+  actorType   AuditActor    @map("actor_type")
+  actorId     String?       @map("actor_id") @db.Uuid
+  /// Kept as text so the entry still reads right after the actor is gone.
+  actorLabel  String        @map("actor_label")
+  action      String
+  category    AuditCategory
+  targetId    String?       @map("target_id")
+  targetLabel String?       @map("target_label")
+  reason      String?
+  device      String?
+  ip          String?
+  result      String
+  prevHash    String        @map("prev_hash")
+  hash        String        @unique
+
+  @@index([at])
+  @@map("audit_log")
+}
+
+enum RecoveryKind {
+  RECOVERY // sealed to the organisation's offline key; the user opts in
+  ESCROW // sealed to a server escrow key; only when the deployment turns escrow on
+
+  @@map("recovery_kind")
+}
+
+model RecoveryKey {
+  userId    String       @map("user_id") @db.Uuid
+  kind      RecoveryKind
+  /// X25519 sealed box of the vaultKey.
+  sealedKey Bytes        @map("sealed_key")
+  createdAt DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, kind])
+  @@map("recovery_keys")
+}
+
+enum RecoveryStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+  USED
+
+  @@map("recovery_status")
+}
+
+model RecoveryRequest {
+  id            String         @id @default(uuid()) @db.Uuid
+  userId        String         @map("user_id") @db.Uuid
+  /// null once that admin is removed; the audit log keeps who it was.
+  requestedById String?        @map("requested_by") @db.Uuid
+  reason        String
+  status        RecoveryStatus @default(PENDING)
+  confirmedById String?        @map("confirmed_by") @db.Uuid
+  confirmedAt   DateTime?      @map("confirmed_at") @db.Timestamptz(3)
+  /// End of the waiting period.
+  availableAt   DateTime?      @map("available_at") @db.Timestamptz(3)
+  cancelledAt   DateTime?      @map("cancelled_at") @db.Timestamptz(3)
+  /// 'user', or the id of the admin who cancelled.
+  cancelledBy   String?        @map("cancelled_by")
+  usedAt        DateTime?      @map("used_at") @db.Timestamptz(3)
+  createdAt     DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  user        User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  requestedBy Admin? @relation("requested", fields: [requestedById], references: [id], onDelete: SetNull)
+  confirmedBy Admin? @relation("confirmed", fields: [confirmedById], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@map("recovery_requests")
+}

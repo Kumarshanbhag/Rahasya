@@ -1,0 +1,26 @@
+name: Nightly database backup
+
+on:
+  schedule:
+    - cron: '30 20 * * *' # 02:00 India time
+  workflow_dispatch:
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install age
+        run: sudo apt-get update && sudo apt-get install -y age
+      # The dump is encrypted to a public key before it is stored; only the matching private key, kept offline, can open it.
+      - name: Dump and encrypt the production database
+        env:
+          DATABASE_URL: ${{ secrets.BACKUP_DATABASE_URL }}
+          RECIPIENT: ${{ secrets.BACKUP_AGE_RECIPIENT }}
+        run: |
+          set -euo pipefail
+          docker run --rm postgres:16 pg_dump --no-owner --format=custom "$DATABASE_URL" | age -r "$RECIPIENT" > "rahasya-$(date -u +%F).dump.age"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rahasya-backup-${{ github.run_id }}
+          path: rahasya-*.dump.age
+          retention-days: 30

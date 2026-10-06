@@ -1,0 +1,65 @@
+# Render Blueprint for the API: staging follows `main`, production follows `release`.
+# Secrets marked sync: false are typed into the Render dashboard; generateValue makes a random 32-byte base64 value once.
+services:
+  - type: web
+    name: rahasya-api-staging
+    runtime: node
+    plan: free
+    region: singapore
+    branch: main
+    autoDeploy: true
+    buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm turbo run build --filter=@rahasya/api...
+    # Migrations run before the new code starts; every migration stays backward compatible for one release.
+    startCommand: pnpm --filter @rahasya/api db:deploy && pnpm --filter @rahasya/api start
+    envVars:
+      - key: NODE_VERSION
+        value: '22'
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: DATA_KEY
+        generateValue: true
+      - key: CORS_ORIGINS
+        sync: false
+      - key: ADMIN_RP_ID
+        sync: false
+      - key: ADMIN_ORIGIN
+        sync: false
+      - key: ADMIN_IP_ALLOWLIST
+        sync: false
+      - key: RECOVERY_PUBLIC_KEY
+        sync: false
+      - key: RECOVERY_WAIT_HOURS
+        value: '48'
+
+  - type: web
+    name: rahasya-api
+    runtime: node
+    plan: free
+    region: singapore
+    branch: release
+    autoDeploy: true
+    buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm turbo run build --filter=@rahasya/api...
+    startCommand: pnpm --filter @rahasya/api db:deploy && pnpm --filter @rahasya/api start
+    envVars:
+      - key: NODE_VERSION
+        value: '22'
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: DATA_KEY
+        generateValue: true
+      - key: CORS_ORIGINS
+        sync: false
+      - key: ADMIN_RP_ID
+        sync: false
+      - key: ADMIN_ORIGIN
+        sync: false
+      - key: ADMIN_IP_ALLOWLIST
+        sync: false
+      - key: RECOVERY_PUBLIC_KEY
+        sync: false
+      - key: RECOVERY_WAIT_HOURS
+        value: '48'

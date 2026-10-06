@@ -1,0 +1,12 @@
+packages:
+  - apps/*
+  - packages/*
+
+# One flat node_modules, as Expo recommends for React Native in pnpm monorepos: shared packages must use the
+# app's single copy of react and react-native, or hooks and context break.
+nodeLinker: hoisted
+
+# Prisma downloads its migration engine on install; nothing else needs install scripts.
+onlyBuiltDependencies:
+  - '@prisma/engines'
+  - prisma

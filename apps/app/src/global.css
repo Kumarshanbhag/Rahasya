@@ -1,0 +1,7 @@
+@import 'tailwindcss';
+@import 'uniwind';
+/* Relative on purpose: Uniwind only discovers theme variants through relative imports. */
+@import '../../../packages/tokens/theme.css';
+
+/* Shared components live outside this app; scan them for class names too. */
+@source '../../../packages/ui/src';

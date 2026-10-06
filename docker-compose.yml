@@ -1,0 +1,16 @@
+# Local Postgres 16 for the API (port 5433 so it never clashes with a Postgres already on 5432).
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: rahasya
+      POSTGRES_PASSWORD: rahasya
+      POSTGRES_DB: rahasya
+    ports:
+      - '5433:5432'
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./apps/api/prisma/create-test-db.sql:/docker-entrypoint-initdb.d/create-test-db.sql:ro
+
+volumes:
+  pgdata:
